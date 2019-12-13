@@ -150,7 +150,8 @@
           :program program'
           :direction direction'
           :coord (mapv + coord direction'))
-        (update :hull assoc coord paint-color)))))
+        (update :hull assoc coord paint-color)
+        (update :visited conj coord)))))
 
 (defn run-robot
   [state]
@@ -160,19 +161,53 @@
       (recur (step-robot state)))))
 
 (defn task1 []
-  (let [initial-state {:program {:instructions (read-input) :index 0 :relative-base 0 :inputs [0]}
+  (let [initial-state {:program {:instructions (read-input) :index 0 :relative-base 0 :inputs []}
                        :hull {}
                        :coord [0 0]
-                       :direction [0 1]}]
+                       :direction [0 1]
+                       :visited []}]
     (-> initial-state
       run-robot
       :hull
       count)))
+
+(defn visualize-hull [hull]
+  (let [coords (keys hull)
+        min-x (apply min (mapv first coords))
+        max-x (apply max (mapv first coords))
+        min-y (apply min (mapv second coords))
+        max-y (apply max (mapv second coords))
+        empty-grid (vec (repeat (- (inc max-y) min-y)
+                          (vec (repeat (- (inc max-x) min-x) "*"))))]
+    (reduce-kv (fn [grid [x y] color]
+                 (assoc-in grid [(- max-y y) (- x min-x)] (if (= 0 color) "*" "#")))
+      empty-grid hull)))
+
+(defn task2 []
+  (let [initial-state {:program {:instructions (read-input) :index 0 :relative-base 0 :inputs []}
+                       :hull {[0 0] 1}
+                       :coord [0 0]
+                       :direction [0 1]
+                       :visited []}]
+    (-> initial-state
+      run-robot
+      :hull)))
 
 (comment
   (take 5 (iterate #(rotate % :right) [1 0]))
   (rotate [1 0] :left)
   (mapv + [0 0] [1 0])
   (pop nil)
-  (task1)
+  (def result (task1))
+  result
+  (def result (task2))
+  result
+  (apply min (mapv second (keys result)))
+  (def hull-vec (visualize-hull result))
+  (doseq [row hull-vec]
+    (doseq [coord row]
+      (print coord))
+    (println))
+  (mapv count (vec (repeat (- 1 -5)
+                (vec (repeat (- 43 0) 0)))))
   )
