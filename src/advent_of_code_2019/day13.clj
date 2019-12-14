@@ -136,17 +136,36 @@
    3 :horizontal-paddle
    4 :ball})
 
-(defn draw-object [board [x y tile-id]]
+(defn draw-object [{:keys [ball-position] :as board} [x y tile-id]]
   (let [object (tile-id->object tile-id)]
-    (cond-> (assoc board [x y] object)
-      (= :ball object)
-      (assoc :ball-position [x y])
-      (= :horizontal-paddle object)
-      (assoc :paddle-position [x y]))))
+    (if (= [-1 0] [x y])
+      (assoc board :high-score tile-id)
+      (cond-> (assoc board [x y] object)
+        (and
+          (not= :block object)
+          (= :block (get board [x y])))
+        (update :blocks disj [x y])
+
+        (= :ball object)
+        (->
+          (assoc :ball-position [x y])
+          (assoc :prev-ball-position ball-position))
+
+        (= :horizontal-paddle object)
+        (assoc :paddle-position [x y])
+
+        (= :block object)
+        (update :blocks (fnil conj #{}) [x y])))))
+
+(defn draw-board
+  ([outputs]
+   (draw-board {} outputs))
+  ([board outputs]
+   (transduce (partition-all 3) (completing draw-object) board outputs)))
 
 (defn task1 []
   (let [outputs (-> (read-input) initial-state run-program :outputs)
-        board (transduce (partition-all 3) (completing draw-object) {} outputs)]
+        board (draw-board outputs)]
     (transduce
       (filter (fn [[_ object]] (= :block object)))
       (completing (fn [n _] (inc n)))
@@ -156,8 +175,41 @@
 (defn play-game [program]
   (loop [program (assoc-in program [:instructions 0] 2)
          board {}]
-    ))
+    (let [{:keys [halted outputs] :as program'} (run-program program)
+          {:keys [prev-ball-position ball-position paddle-position blocks high-score] :as board'}
+          (draw-board board outputs)]
+      (cond
+        (empty? blocks) high-score
+        halted (println "Halted early" board' (dissoc program' :instructions))
+        :else (let [[x y] (or prev-ball-position ball-position)
+                    [x' y'] ball-position
+                    try-next-x (+ x' (- x' x))
+                    next-to-wall? (#{:wall :block} (get board [try-next-x y']))
+                    next-x (if next-to-wall? x try-next-x)
+                    next-x (if (= [x' (inc y')] paddle-position) x' next-x)]
+                (recur
+                  (assoc program'
+                    :outputs []
+                    :inputs [(compare next-x (first paddle-position))]
+                    :needs-input false)
+                  board'))))))
+
+(defn task2 []
+  (play-game (initial-state (read-input))))
 
 (comment
   (task1)
+  (task2)
+  (def initial-board (-> (read-input)
+                       initial-state
+                       (assoc-in [:instructions 0] 2)
+                       run-program
+                       :outputs
+                       draw-board))
+  initial-board
+  (sort-by (comp second key)
+    (filterv (fn [[k v]]
+               (and (vector? k)
+                 (= 21 (first k))))
+      initial-board))
   )
